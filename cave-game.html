@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>TCO 1</title>
+        
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Anton&family=Press+Start+2P&family=Roboto:ital,wght@0,100..900;1,100..900&family=Rowdies:wght@300;400;700&family=Signika:wght@300..700&family=VT323&display=swap" rel="stylesheet">
+        
+        <style>
+            body {
+                margin:0;
+                overflow:hidden;
+                background-color: rgb(25, 20, 20);
+            }
+
+            canvas {
+                padding-left: 0;
+                padding-right: 0;
+                margin-left: auto;
+                margin-right: auto;
+                display: block;
+            }
+        </style>
+    </head>
+    <body></body>
+
+    <!-- 
+    CREDITS:
+     - Bearkirb: Vector library
+     - AI: finding bug in flood filling algorithm in terrain generation (no code was written by AI)
+     - Matt: Pixel art generator
+     - Obviosley, this game was (partially) inspired by minecraft
+     -->
+
+    <!-- Change the following line for easy mode (for judges (you should still play the normal game tho)) -->
+    <script>var easyMode = false;</script>
+    <!-- Easy mode doubles your damage and halfs the enemy's damage -->
+
+    <!-- HOW (if you cant figure it out from playing the game) -->
+    <!-- wasd to move, click to attack, e to open inventory, e while next to a chest to open the chest, attack a chest to destroy it -->
+    <!-- surely you dont need me to tell you that F turns on your headlamp -->
+
+    <!-- P5.js -->
+    <script src="https://cdn.jsdelivr.net/gh/NS236/p5.js-ka@main/lib/p5.js"></script>
+    <script> new p5();</script>
+        
+    <!-- MAIN -->
+    <script type>
+        
+        // When you reload the webpage via the reload button on ka, the variables are not cleared, therefore trying to use let and const in the global scope will trigger an error, so everything must be wrapped in an iife
+        (() => {
+
+        // globals
+        const TILE_SIZE = 20;
+        const TILES_IN_SCREEN = 600/TILE_SIZE;
+
+        let delataTime = 33;
+        let click = false;
+        let keys = {};
+
+        let playerPoints = 0;
+
+        const copyObj = obj => JSON.parse(JSON.stringify(obj));
+        const anim1 = x => 4 * (x - 0.5) ** 3 + 0.5;
+
+        const images = (() => {
+
+            //Parameters: (data, resolution): (resolution is optional)
+            /* Created using Pixel Master by Matt: https://www.khanacademy.org/cs/pixel-master-image-generator/5340753432150016 */
+            var textSet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZāăąǎǟǡǣȁȃćĉċčďđēĕėęěȅȇĝğġģǥǧǵĥħĩīĭįıǐȉĵķǩĺļľŀłńņňŉŋōŏőœǒǫǭŕŗřśŝşšţťŧũūŭůűųǔǖǘǚǜŵŷźżžĀĂĄĆĈĊČĎĐĒĔĖĘĚĜĞĠĢĤĦĨĪĬĮİĴĶĹĻĽĿŁŃŅŇŊŌŎŐŒŔŖŘŚŜŞŠŢŤŦŨŪŬŮŰŲŴŶŸŹŻŽɐɔǝɟƃɥᴉɾʞɯɹʇʌʍʎαβγδεζηθικλμξπρσςτυφχψωΓΔΘΛΞΠΣΦΨΩ";var getColorFromString = function(s) {if (s.length >= 4) {return color(textSet.indexOf(s[0]), textSet.indexOf(s[1]), textSet.indexOf(s[2]), textSet.indexOf(s[3]));} else {return color(textSet.indexOf(s[0]), textSet.indexOf(s[1]), textSet.indexOf(s[2]));}};var newImage = function(data, res) {data = split(data, "/");var plot = split(data[0], ",");var colors = split(data[1], ",");var w = 0;for (var i in plot) {w = max(w, plot[i].length);}var h = plot.length;for (var i in colors) {colors[i] = getColorFromString(colors[i]);}if (res === undefined) {res = min(width/w, height/h);}res = round(res);var img = createGraphics(w * res, h * res, P2D);if (img) {img.background(0, 0);img.noStroke();for (var b in plot) {for (var a in plot[b]) {if (plot[b][a] !== ".") {img.fill(colors[textSet.indexOf(plot[b][a])]);img.rect(a * res, b * res, res, res);}}}}return img;};
+                   
+            function maskImg (text) {
+                const img = newImage(text).get();
+
+                img.mask(img);
+
+                return img;
+            }
+
+            // functions to draw different colored versions of swords, armor, and enemies
+
+            function swordImg (c1, c2, c3) {
+                return maskImg(`000000012,000000121,000001210,000012100,000121000,331210000,031100000,333300000,330300000/ħħħ0,${c1},${c2},${c3}`);
+            }
+
+            function armorImg (c1, c2, c3) {
+                return maskImg(`000000000,001111100,012223310,122233331,123333331,131111131,010000010,000000000,000000000/ħħħ0,${c3},${c1},${c2}`);
+            }
+
+            function enemyImg (c1, c2, c3, c4, c5) {
+                return maskImg(`000011110000,002211111100,032121111110,022212221210,221222222222,322222212222,233332222222,322323333232,033333233320,033443344330,003553355300,000033330000/ħħħ0,${c1},${c2},${c3},${c4},${c5}`);
+            }
+
+            return {
+
+                menuImg() {
+                    return newImage("00000000000000000000000000000000000000000000000000,00000000000000000000000000000000000000000000000000,00000000000000000000000000000000000000000000000000,00000000000000000000000000000000000000000000000000,11000000000000000000000000000000000000000000000000,11111111100000000000011111111111110000000011111110,11111111111111111111111111111111111111111111111111,11111111111111111111111111111111111111111111111111,11111111111111111111111111111111111111111111111111,11111112221111111111111111111111111111111111111211,12222222222222211111111111111111111111111111122222,22222222222222222211111111111222222222222222222222,22222222222222222222222222222222222222222222222222,22222222222222222222222222222222222222222222222222,22222222222222222222222222222222222222233333333332,33333333333332222223333333333333333333333333333333,34443333333333333333444333333333333334333333334333,33333444333343333333333333443333333333433333333333,33333333333334433333333333333333344443333355555333,55555555555333333333355555555555555555555555555555,55555555555555555555555555555555555555555555555555,55555555555555555555555555555555555555555556555555,55555555555555555555555555555555555555555577675555,55555765755555555555555555555555555555555557665555,55555576655555555555555555555555555555555566655555,85555666655555555555555555555555555555555553388888,88885533555555555555555555555555555888888883388888,88888833855555588888888888888888888888888883388888,88888833888888888888888888888888888888888883388888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888888888888888888888888,88888888888888888888888888888889999988888888888888,99999888888888888888888899999999999999999988888888,99999999999999999999899999999999999999999999999999,99999999999999999999999999999999999999999999999999,99999999999999999999999999999999999999999999999999,999999999999999999aaaaaaaa999999999999999999999999,aaaaaaaaaaa9999aaaaaaaaaaaaaa999999999999999999999,aaaaaaaaaaaaaaaaaaaabbbbbaaaaaaaa999999aaaaaa99999,aaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbaaaaaaaaaaaaaa9aaa,bbbbbaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaa,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/ťĕ3,ŀą2,ǥR1,ģD4,Yq2,ĝċǎ,ŞFk,ςʌO,XME,đK1,YA0,Eo1").get();
+                },
+
+                menuMiner() {
+                    return newImage("00000000011110000000,00000000112211300000,00000000121112300000,00000003344454110000,00000033044444000000,00000333064440000000,00003376088800000000,00003397688880000000,0003300976888a000000,0003000b97688a000000,0000000b89448a000000,0000000b88488a000000,0000000bbb8c8a000000,0000000deeefe4000000,00000000ghhhh4000000,00000000ghhgh0000000,00000000ghigh0000000,00000000ghigh0000000,00000000jjkaj0000000,00000000jjjajj000000,00000000lll5ll000000/ΩΩΩ0,Ŀŵm,ŻĽz,ŰŰŰ,ηŜĖ,vpk,ĭRi,ŗąg,œǡp,ďGe,ȅIc,ľȃF,ɹŠM,ċDc,ĥNe,Ŵİk,wLĉ,Pčō,qCX,ĵVl,En8,ǡFj").get();
+                },
+
+                path() {
+
+                    var path = newImage("0000120000001200,0000120000012000,0000120000012000,0000120000001200,2200112001111122,1121012111000011,0012001200000010,0012000122000010,0120002211200010,0120021100120010,0120210000012100,0122120000001000,0011122222212000,0000011111101200,0000010000001200,0000120000001200/ŰŰŰ,ĴĴĴ,ʍʍʍ");
+                    
+                    const g = createGraphics (600, 600);
+                    g.image(path, 0, 0, 600, 600);
+
+                    let images = [];
+                    for (let i = 0; i < 16; i ++) {
+                        images.push(g.get((i % 4) * 150, Math.floor(i/4) * 150, 150, 150));
+                    }
+
+                    return images;
+                },
+
+                smoothStone() {
+                    var smoothStone = newImage("0120000012000100,0012000012000100,0001202101221000,0000121100110000,0000110010001000,0001200010001000,0110120001001002,1200012001001021,0120001222112010,0120002111001210,0122221000000100,0011112000000100,0000101202221000,0001000121112000,0010000010001200,0100000010000100/ĦĜĜ,ųũũ,ŒŇŇ");
+
+                    const g = createGraphics (600, 600);
+                    g.image(smoothStone, 0, 0, 600, 600);
+
+                    let images = [];
+                    for (let i = 0; i < 16; i ++) {
+                        images.push(g.get((i % 4) * 150, Math.floor(i/4) * 150, 150, 150));
+                    }
+
+                    return images;
+                },
+
+                stone() {
+                    var stone = newImage("0120000012000100,0012000012000100,0001202101221000,0000121100110000,0000110010001000,0001200010001000,0110120001001002,1200012001001021,0120001222112010,0120002111001210,0122221000000100,0011112000000100,0000101202221000,0001000121112000,0010000010001200,0100000010000100/žǜǜ,őňň,ĦĜĜ");
+
+                    const g = createGraphics (600, 600);
+                    g.image(stone, 0, 0, 600, 600);
+
+                    let images = [];
+                    for (let i = 0; i < 16; i ++) {
+                        images.push(g.get((i % 4) * 150, Math.floor(i/4) * 150, 150, 150));
+                    }
+
+                    return images;
+                },
+
+                wall () {
+                    var wall = newImage("0001000000101000,1001000000010001,0110001100001010,0010010010110100,0010110001001000,0001001010001000,0010000100000100,0101000010000100,1001000101000101,0001001000100010,0010110000101100,0100001101010000,1010000010010011,0001000010001100,0001000001001000,0001000000101000/MMM,777");
+
+                    const g = createGraphics (600, 600);
+                    g.image(wall, 0, 0, 600, 600);
+
+                    let images = [];
+                    for (let i = 0; i < 16; i ++) {
+                        images.push(g.get((i % 4) * 150, Math.floor(i/4) * 150, 150, 150));
+                    }
+
+                    return images;
+                },
+
+                player () {
+
+                    let mask = newImage("000011110000,001111111100,011111111110,011111111110,111111111111,111111111111,111111111111,111111111111,011111111110,011111111110,001111111100,000111111000,000011110000/ΛΛχ0,ΩΩΩ").get();
+
+                    let filling = newImage("000012340000,004412344400,023411234420,012311234230,112311234234,111242342344,311244442444,234244442442,023444444420,024455554420,004555555400,000555555000,000067660000/ΛΛχ0,ɔɔ0,Ĉŷ0,ΩΩ0,ŻŨa,BBB,ΩΠŅ,ΩΨι").get();
+
+                    filling.mask(mask);
+
+                    return filling;
+                },
+
+                playerNoHeadlamp () {
+
+                    let mask = newImage("000011110000,001111111100,011111111110,011111111110,111111111111,111111111111,111111111111,111111111111,011111111110,011111111110,001111111100,000111111000,......../ΛΛχ0,ΩΩΩ").get();
+
+                    let filling = newImage("000012340000,004412344400,023411234420,012311234230,112311234234,111242342344,311244442444,234244442442,023444444420,024455554420,004555555400,000555555000/ΛΛχ0,ɔɔ0,Ĉŷ0,ΩΩ0,ŻŨa,BBB").get(); 
+
+                    filling.mask(mask);
+
+                    return filling; 
+                },
+
+                dimLightMask () {
+                    let filling = createGraphics(600, 600).background(0).get();
+
+                    const g = createGraphics (600, 600).background(0, 0);
+
+                    g.noFill();
+
+                    g.strokeWeight (200);
+
+                    g.strokeWeight (5);
+
+                    for (let i = 1000; i >= 0; i -= 5) {
+                        g.stroke(255, (1 - 1/Math.sqrt(i/30)) * 255);
+                        g.ellipse(300, 300, i, i);
+                    }
+
+                    let mask = g.get();
+
+                    filling.mask(mask);
+
+                    return filling;
+                },
+
+                brightightMask () {
+                    let filling = createGraphics(600, 600).background(0).get();
+
+                    const g = createGraphics (600, 600).background(0, 0);
+
+                    g.noFill();
+
+                    g.strokeWeight (200);
+
+                    g.strokeWeight (5);
+
+                    for (let i = 1000; i >= 0; i -= 5) {
+                        g.stroke(255, (1 - 1/Math.sqrt(i/80)) * 255);
+                        g.ellipse(300, 300, i, i);
+                    }
+                    let mask = g.get();
+
+                    filling.mask(mask);
+
+                    return filling;
+                },
+
+                noLightMask () {
+                    return createGraphics(600, 600).background(0).get();
+                },
+
+                "wooden sword" () {
+                    return swordImg('śǎd', 'ľP3', 'ċA3');
+                },
+
+                "wooden armor" () {
+                    return armorImg('śǎd', 'ľP3', 'ċA3');
+                },
+
+                "stone sword" () {
+                    return swordImg('ĵĵĵ','ĝĝĝ','ONN');
+                },
+
+                "stone armor" () {
+                    return armorImg('ĵĵĵ','ĝĝĝ','ONN');
+                },
+
+                "iron sword" () {
+                    return swordImg('ŢŢŢ','ČČČ','őőő');
+                },
+
+                "iron armor" () {
+                    return armorImg('ŢŢŢ','ČČČ','őőő');
+                },
+
+                "titanium sword" () {
+                    return swordImg('αʇΦ','źűŻ','ǧģľ');
+                },
+
+                "titanium armor" () {
+                    return armorImg('αʇΦ','źűŻ','ǧģľ');
+                },
+
+                "diamond sword" () {
+                    return swordImg('Fɯκ','qťŪ','Rāň');
+                },
+
+                "diamond armor" () {
+                    return armorImg('Fɯκ','qťŪ','Rāň');
+                },
+
+                "meteorite sword" () {
+                    return swordImg('ļ33','ŧ11','Fnn');
+                },
+
+                "meteorite armor" () {
+                    return armorImg('ļ33','ŧ11','Fnn');
+                },
+
+                "magic sword" () {
+                    return swordImg('rŤ8','lĖ6','fNb');
+                },
+
+                "magic armor" () {
+                    return armorImg('rŤ8','lĖ6','fNb');
+                },
+
+                carrot () {
+                    return maskImg("000000100,000022110,000222211,002222230,002222330,022323300,022233000,223300000,230000000/ħħħ0,xĖ7,ΩĈ0,ɔǒh");
+                },
+
+                apple () {
+                    return maskImg("000110000,002211300,024233330,242333333,222333333,222333333,223333333,022333330,002233300/ħħħ0,gŗt,ʎ88,Ů22,σŽŽ");
+                },
+
+                bread () {
+                    return maskImg("000011120,001133222,011223322,113322322,122332222,232232220,223222200,022222000,000000000/ħħħ0,Įŉe,Ăįd,ťğd");
+                },
+
+                steak () {
+                    return maskImg("000001110,000112333,001133233,011323323,112332333,133233230,133323330,032333300,003330000/ħħħ0,ĂV9,ȃt7,ŝOb");
+                },
+
+                "enchanted mushroom" () {
+                    return maskImg("001111100,011223320,112222232,120044022,000444000,000440000,004440000,000444000,000044000/ħħħ0,Ŵǜĭ,Řǜı,ωŽŅ,ρŚĐ");
+                },
+
+                "mystery stew" () {
+                    return maskImg("000000000,000000000,001111100,011222110,322222223,334222233,332424233,033333330,003333300/ħħħ0,0Ű0,9İ9,ąC3,7Ă7");
+                },
+
+                "shiny red berries" () {
+                    return maskImg("000110000,000101000,001002230,001042253,022342223,422542222,422234220,422220000,042200000/ħħħ0,9ė7,Ē44,Į33,ż66,ΓŻŻ");
+                },
+
+                flashlight () {
+                    return maskImg("000000100,000001110,000011122,000111220,011112200,032222000,444220000,043320000,004000000/ľP30,KLK,KGD,ΩΩ0,ΠΦŦ");
+                },
+
+                pickaxe () {
+                    return maskImg("000122000,001333240,000003320,000044332,000444032,004440031,044400010,444000000,440000000,.....0/ľP30,ĵĵĵ,ŰŰŰ,ŃŅĽ,ľP3");
+                },
+
+                zombie () {
+                    return enemyImg('Lŧc','Dŀa','Aħd','KLK','000');
+                },
+
+                spider () {
+                    return maskImg("000011110000,002211111100,032121111110,022212221210,221222222222,322222212222,244232222442,355223332552,033333233320,033443344330,003553355300,000033330000/ħħħ0,κǔ0,ᴉš0,Ŵǭ0,KLK,000");
+                },
+
+                ghost () {
+                    return enemyImg('κκκ','ŹŹŹ','ŇŇŇ','KLK','000');
+                },
+
+                wraith () {
+                    return enemyImg('āāā','KLK','qqq','ɾɾɾ','ŞŞŞ');
+                },
+
+                "angler beast" () {
+                    return maskImg("000011220000,001122222200,011232222220,013323332320,132333333333,433333323333,344443333333,433434444343,044444344430,044554455440,004664466400,000044440000/ħħħ0,ΨΦĨ,ΘΘď,ιιǡ,ɯɯZ,KLK,000");
+                },
+
+                bat () {
+                    return maskImg("000011110000,002211111100,022321113110,022312223210,223132231312,423532235322,231663316632,436663446632,044444244420,044774477440,004884488400,000044440000/ħħħ0,XXX,KLK,000,ttt,ΔwH,ʎsB,ΩΩΩ,ŰŰŰ");
+                },
+
+                golem () {
+                    return maskImg("000012220000,001231112200,011123111130,011123311330,231232233312,123311123112,112311123333,112331132223,013223311120,031442344120,001552355100,000013110000/ħħħ0,űűű,ĄĄĄ,ĵĵĵ,ĵ00,Č00");
+                },
+
+                chest () {
+                    return maskImg("000000000000,001111111100,012334423310,143344343331,143355553341,143567765341,144555555341,111576765111,122155551221,122122221221,122122221221,011111111110/ΩΩΩ0,ǟEa,ǫǣ7,Żřk,Ĩįa,ŰŰŰ,ĵĵĵ,WWW");
+                },
+
+                heart () {
+                    return maskImg("001101100,012212210,123222221,122222221,142222241,014222410,001424100,000141000,000010000/łGG0,ΩΩΩ,ψff,Θσσ,ɾII");
+                },
+
+                halfHeart () {
+                    return maskImg("001101100,012210010,123220001,122220001,142220001,014220010,001420100,000141000,000010000/łGG0,ΩΩΩ,ψff,Θσσ,ɾII");
+                },
+
+                emptyHeart () {
+                    return maskImg("001101100,010010010,100000001,100000001,100000001,010000010,001000100,000101000,000010000/łGG0,ΩΩΩ");
+                },
+
+                armor () {
+                    return maskImg("011000110,122101341,122214441,122244441,012244410,012444210,014442210,014422210,001111100/ňňň0,ΩΩΩ,ňňň,ŰŰŰ,ĵĵĵ");
+                },
+
+                halfArmor () {
+                    return maskImg("011000110,122101001,122210001,122230001,012230010,012330010,013330010,013320010,001111100/ňňň0,ΩΩΩ,ňňň,ĵĵĵ");
+                },
+
+                emptyArmor () {
+                    return maskImg("011000110,100101001,100010001,100000001,010000010,010000010,010000010,010000010,001111100/ňňň0,ΩΩΩ");
+                },
+
+                hotbar () {
+                    const g = createGraphics(600, 600);
+
+                    g.background (77, 77, 77, 200);
+                    g.noFill();
+
+                    g.stroke(230);
+                    g.strokeWeight (6);
+
+                    for (var i = 0; i < 5; i ++) {
+                        g.rect(i * 50 + 10, 100, 50, 50);
+                    }
+
+                    g.stroke(30);
+                    g.strokeWeight (4);
+
+                    for (var i = 0; i < 5; i ++) {
+                        g.rect(i * 50 + 10, 100, 50, 50);
+                    }
+
+                    return g.get(7, 97, 256, 56);
+                },
+
+                inventory () {
+                    
+                    const g = createGraphics(600, 600);
+
+                    g.background (77, 77, 77, 200);
+                    g.noFill();
+
+                    g.stroke(230);
+                    g.strokeWeight (6);
+
+                    for (var i = 0; i < 5; i ++) {
+                        for (var j = 0; j < 5; j ++) {
+                           g.rect(j * 50 + 10,  i * 50 + 10, 50, 50);
+                        }
+                    }
+
+                    g.stroke(30);
+                    g.strokeWeight (4);
+
+                    for (var i = 0; i < 5; i ++) {
+                        for (var j = 0; j < 5; j ++) {
+                            g.rect(j * 50 + 10,  i * 50 + 10, 50, 50);
+                        }
+                    }
+
+                    return g.get(7, 7, 256, 256);
+                }
+            };
+        })();
+ 
+        const Vector = (() => {
+            class Vector {
+                constructor(x = 0, y = 0, z = 0) {
+                    this.x = x;
+                    this.y = y;
+                    this.z = z;
+                }
+                subtract(v) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x -= v.x;
+                    ve.y -= v.y;
+                    ve.z -= v.z;
+                    return ve;
+                }
+                add(v) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x += v.x;
+                    ve.y += v.y;
+                    ve.z += v.z;
+                    return ve;
+                }
+                divide(n) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x /= n;
+                    ve.y /= n;
+                    ve.z /= n;
+                    return ve;
+                }
+
+                mult(n) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x *= n;
+                    ve.y *= n;
+                    ve.z *= n;
+                    return ve;
+                }
+                magnitude() {
+                    return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+                }
+                magSq() {
+                    return this.x * this.x + this.y * this.y + this.z * this.z;
+                }
+                dot(v) {
+                    return this.x * v.x + this.y * v.y + this.z * v.z;
+                }
+                scale(n) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x *= n;
+                    ve.y *= n;
+                    ve.z *= n;
+                    return ve;
+                }
+                normalize() {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    if (ve.x === 0 && ve.y === 0 && ve.z === 0) return ve;
+                    ve = ve.divide(ve.magnitude());
+                    return ve;
+                }
+                rotateBy(ang) {
+                    return new Vector(this.x * Math.cos(ang) - this.y * Math.sin(ang), this.x * Math.sin(ang) + this.y * Math.cos(ang));
+                }
+                rotate3d(anglex, angley){
+                    var ve = new Vector(this.x,this.y,this.z);
+                    var ro1 = new Vector(this.y,this.z).rotateBy(-anglex);
+                    var ro2 = new Vector(this.x,ro1.y).rotateBy(-angley);
+                    ve.y = ro1.x
+                    ve.z = ro1.y;
+                                
+                    ve.x = ro2.x;
+                    ve.z = ro2.y;
+                    return ve;
+                }
+                reflect(n) {
+                    var ve = new Vector(this.x, this.y);
+                    ve = ve.subtract(n.scale(2 * ve.dot(n)))
+                    return ve;
+                }
+                abs() {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x = Math.abs(ve.x);
+                    ve.y = Math.abs(ve.y);
+                    ve.z = Math.abs(ve.z);
+                    return ve;
+                }
+                max(n) {
+                    var ve = new Vector(this.x, this.y, this.z);
+                    ve.x = Math.max(ve.x, n);
+                    ve.y = Math.max(ve.y, n);
+                    ve.z = Math.max(ve.z, n);
+                    return ve;
+                }
+            } 
+            return Vector;
+        })(); // bearkirb's Vector lib
+
+        const buttons = (() => {
+            class Button {
+                constructor (config) {
+                    this.x = config.x || 0;
+                    this.y = config.y || 0;
+                    this.width = config.width || 20;
+                    this.height = config.height || 20;
+
+                    // hover animation stuff
+                    this.hoverScale = config.hoverAnimScale ?? 0.1;
+                    this.maxWidth = this.width * (1 + this.hoverScale);
+                    this.startWidth = this.width;
+                    this.minX = this.x - this.width * this.hoverScale / 2;
+                    this.maxX = this.x;
+                    this.angle = 0;
+                    this.minAngle = 0;
+                    this.maxAngle = config.hoverRotate ?? Math.PI/46;
+
+                    this.color = config.color || color(255);
+                    this.borderColor = config.borderColor || color (0);
+                    this.borderWeight = config.borderWeight || 1;
+                    this.borderRadius = config.borderRadius || 0;
+
+                    this.text = config.text || "filler";
+                    this.textSize = config.textSize || 20;
+                    this.textYOffset = config.textYOffset || 0;
+                    this.textColor = config.textColor || color (0);
+
+                    this.unhoverTextColor = this.textColor;
+                    this.hoverTextColor = config.hoverTextColor || this.textColor;
+
+                    this.onclick = config.onclick || function(){};
+                    this.scene = config.scene || "menu"; // keep track of this so that the button does not click when it is not being displayed
+                }
+
+                display () {
+
+                    push();
+                    translate (this.x + this.width/2, this.y + this.height/2);
+                    rotate (this.angle);
+
+                    // display the button
+                    fill (this.color);
+                    stroke (this.borderColor);
+                    strokeWeight (this.borderWeight);
+                    rect (-this.width/2, -this.height/2, this.width, this.height, this.borderRadius);
+
+                    // display text
+                    noStroke ();
+                    fill (this.textColor)
+                    textSize(this.textSize);
+                    textAlign(CENTER, BASELINE);
+                    text (this.text, 0, this.textYOffset);
+
+                    pop();
+
+                    return this;
+                }
+
+                onHover () {
+
+                    const lerpSpeed = 0.3;
+
+                    if (this.mouseOver) {
+
+                        // lerp values towards the hovered state
+                        this.width = lerp(this.width, this.maxWidth, lerpSpeed);
+                        this.x = lerp(this.x, this.minX, lerpSpeed);
+                        this.angle = lerp(this.angle, this.maxAngle, lerpSpeed);
+                        this.textColor = lerpColor(this.textColor, this.hoverTextColor, lerpSpeed);
+                    }
+                    if (!this.mouseOver) {
+
+                        // lerp values towards the unhovered state
+                        this.textColor = lerpColor(this.textColor, this.unhoverTextColor, lerpSpeed);
+                        this.width = lerp(this.width, this.startWidth, lerpSpeed);
+                        this.x = lerp(this.x, this.maxX, lerpSpeed);
+                        this.angle = lerp(this.angle, this.minAngle, lerpSpeed);
+                    }
+                }
+
+                update () {
+
+                    this.onHover();
+                    if (click && this.mouseOver) this.onclick();
+                    return this;
+                }
+
+                get mouseOver () {
+                    return mouseX > this.x && mouseX < this.x + this.width && mouseY > this.y && mouseY < this.y + this.height;
+                }
+
+                run () {
+                    this.update().display();
+                }
+            }
+
+            const buttons = {
+                buttons: [],
+
+                run () {
+                    
+                    for (let i of this.buttons) {
+                        if (scenes.current === i.scene || scenes.transitionTo === i.scene) i.run();
+                    }
+                },
+
+                add (config) {
+                    this.buttons.push (new Button (config));
+                }
+            }
+
+            buttons.add ({
+                x: 360, y: 267, 
+                width: 210, height: 137,
+                color: color (240),
+                textColor: color(20),
+                text: "PLAY", textSize: 100,
+                borderColor: color(200), borderWeight: 0,
+                borderRadius: 0, textYOffset: 27,
+                hoverScale: 0.5,
+                scene: "gameOver", onclick: function() {
+                    player.reset();
+                    scenes.nextTransition = ["play", (() => get()), 1];
+                }
+            });
+
+            buttons.add ({
+                x: 360, y: 433, 
+                width: 210, height: 137,
+                color: color (240),
+                textColor: color(20),
+                text: "HOME", textSize: 100,
+                borderColor: color(200), borderWeight: 0,
+                borderRadius: 0, textYOffset: 27,
+                hoverScale: 0.5,
+                scene: "gameOver", onclick: function() {
+                    player.reset();
+                    scenes.nextTransition = ["home", (() => get()), 1];
+                }
+            });
+
+            buttons.add ({
+                x: 60, y: 430, 
+                width: 210, height: 137,
+                color: color (190),
+                textColor: color(20),
+                text: "EASY", textSize: 100,
+                borderColor: color(200, 0), borderWeight: 0,
+                borderRadius: 0, textYOffset: 27,
+                hoverScale: 0.5,
+                scene: "selectMode", onclick: function() {
+                    player.reset();
+                    easyMode = true;
+                    scenes.nextTransition = ["play", (() => get()), 1];
+                }
+            });
+
+            buttons.add ({
+                x: 330, y: 430, 
+                width: 210, height: 137,
+                color: color (190),
+                textColor: color(20),
+                text: "HARD", textSize: 100,
+                borderColor: color(200, 0), borderWeight: 0,
+                borderRadius: 0, textYOffset: 27,
+                hoverScale: 0.5,
+                scene: "selectMode", onclick: function() {
+                    player.reset();
+                    easyMode = false;
+                    scenes.nextTransition = ["play", (() => get()), 1];
+                }
+            });
+
+            return buttons;
+        })();
+
+        const terrain = (() => {
+
+            const cache = {};
+
+            let blocksToFill = [];
+            let hitBigCaveAir = false; // if we hit air that has already been marked as in a big cave, then we instantly know we are in a big cave and dont need to continue
+            const floodFillMax = 500;
+
+            const wallThreshold = 0.3; // the threshold for the perlin noise that will make some block solid
+            const stoneThreshold = 0.2;
+            const smoothStoneThreshold = 0.17;
+
+            return {
+                getBlock (x, y, floodFilling) {
+
+                    // if we are in the floodfilling recursion and have reached over 100 connected air blocks, then we have detected that we are in a large cave
+                    if (floodFilling && blocksToFill.length > floodFillMax) return false;
+
+                    if (floodFilling && cache[y] && cache[y][x] && cache[y][x].bigCave) hitBigCaveAir = true;
+
+                    // check the cache
+                    if (cache[y] && cache[y][x] !== undefined) return cache[y][x];
+
+                    // adding 1e5 to the coords because the origin is symetrical for some reason so we need to shift away
+                    const val = noise(x * 0.02 + 1e5, y * 0.02 + 1e5) ** 2;
+                    let block = {bigCave: false, solid: false}; 
+                    if (val > wallThreshold) {block.type = "wall"; block.solid = true;}
+                    else if (val > stoneThreshold) {block.type = "stone";}
+                    else if (val > smoothStoneThreshold) {block.type = "smoothStone";}
+                    else {block.type = "path";}
+
+                    if (!cache[y]) cache[y] = {};
+                    cache[y][x] = block
+
+                    // if its an air block, then floodfill to detect small caves
+                    if (!block.solid) {
+                        if (!floodFilling) {
+                            // reset on the first one
+                            blocksToFill = [];
+                            hitBigCaveAir = false;
+                        } 
+
+                        blocksToFill.push([x, y]);
+
+                        if (!hitBigCaveAir) {
+                            // visit all of the neighbors
+                            terrain.getBlock(x + 1, y, true)
+                            terrain.getBlock(x - 1, y, true)
+                            terrain.getBlock(x, y + 1, true)
+                            terrain.getBlock(x, y - 1, true)
+                        }
+                        
+                        // either fill in air blocks with stone if a enclosed cave is detected, or fill with cave air blocks if a large cave is detected
+                        // const blockTypeToFill = (blocksToFill.length <= floodFillMax && !hitBigCaveAir) ? "stone":"big cave air";
+                        if (!floodFilling) {
+                            for (let i of blocksToFill) {
+                                if ((blocksToFill.length <= floodFillMax && !hitBigCaveAir)) {
+                                    cache[i[1]][i[0]].type = "wall";
+                                    cache[i[1]][i[0]].solid = true;
+                                } else {
+                                    cache[i[1]][i[0]].bigCave = true;
+                                }
+                            }
+                        }
+                    }
+
+                    return block;
+                },
+            }
+        })();
+
+        const itemData = (() => {
+            return {
+                "": { // fist
+                    damage: 5,
+                    knockback: 0.2,
+                    reload: 40, // frames
+                    animation: "jab",
+                    usable: true,
+                },
+                "flashlight": {
+                    damage: 1,
+                    knockback: 0,
+                    reload: 120, // frames
+                    animation: "jab",
+                    usable: true,
+                },
+                "pickaxe": {
+                    damage: 10,
+                    knockback: 0.7,
+                    reload: 80, // frames
+                    animation: "swing",
+                    usable: true,
+                },
+                "carrot": {
+                    healing: 20,
+                    consumable: "food",
+                },
+                "wooden sword": {
+                    damage: 10,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 1,
+                },
+                "wooden armor": {
+                    armor: 50,
+                    consumable: "armor",
+                    level: 1,
+                },
+                "apple": {
+                    healing: 30,
+                    consumable: "food",
+                },
+                "stone sword": {
+                    damage: 15,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 2,
+                },
+                "stone armor": {
+                    armor: 75,
+                    consumable: "armor",
+                    level: 2,
+                },
+                "bread": {
+                    healing: 40,
+                    consumable: "food",
+                },
+                "iron sword": {
+                    damage: 20,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 3,
+                },
+                "iron armor": {
+                    armor: 100,
+                    consumable: "armor",
+                    level: 3,
+                },
+                "steak": {
+                    healing: 60,
+                    consumable: "food",
+                },
+                "titanium sword": {
+                    damage: 30,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 4,
+                },
+                "titanium armor": {
+                    armor: 150,
+                    consumable: "armor",
+                    level: 4,
+                },
+                "enchanted mushroom": {
+                    healing: 100,
+                    consumable: "food",
+                },
+                "diamond sword": {
+                    damage: 45,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 5,
+                },
+                "diamond armor": {
+                    armor: 175,
+                    consumable: "armor",
+                    level: 5,
+                },
+                "mystery stew": {
+                    healing: 140,
+                    consumable: "food",
+                },
+                "meteorite sword": {
+                    damage: 60,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 6,
+                },
+                "meteorite armor": {
+                    armor: 200,
+                    consumable: "armor",
+                    level: 6,
+                },
+                "shiny red berries": {
+                    healing: 170,
+                    consumable: "food",
+                },
+                "magic sword": {
+                    damage: 70,
+                    knockback: 1,
+                    reload: 40, // frames
+                    animation: "swing",
+                    usable: true,
+                    level: 7,
+                },
+                "magic armor": {
+                    armor: 250,
+                    consumable: "armor",
+                    level: 7,
+                },
+            }
+        })();
+
+        const enemyTypes = (() => {
+            return {
+                "zombie": {
+                    health: 50,
+                    weapon: "wooden sword",
+                    movementPower: 0.6,
+                    type: "zombie",
+                    dropType: "wooden",
+                },
+                "spider": {
+                    health: 50,
+                    weapon: "stone sword",
+                    movementPower: 0.6,
+                    type: "spider",
+                    dropType: "stone",
+                },
+                "ghost": {
+                    health: 50,
+                    weapon: "iron sword",
+                    movementPower: 0.6,
+                    type: "ghost",
+                    dropType: "iron",
+                },
+                "wraith": {
+                    health: 60,
+                    weapon: "titanium sword",
+                    movementPower: 0.6,
+                    type: "wraith",
+                    dropType: "titanium",
+                },
+                "angler beast": {
+                    health: 70,
+                    weapon: "diamond sword",
+                    movementPower: 0.6,
+                    type: "angler beast",
+                    dropType: "diamond",
+                },
+                "bat": {
+                    health: 50,
+                    weapon: "meteorite sword",
+                    movementPower: 1,
+                    type: "bat",
+                    dropType: "meteorite",
+                },
+                "golem": {
+                    health: 150,
+                    weapon: "magic sword",
+                    movementPower: 0.7,
+                    type: "golem",
+                    dropType: "magic",
+                },
+            }
+        })();
+
+        const dropLevels = {
+            "wooden": 1,
+            "stone": 2,
+            "iron": 3,
+            "titanium": 4,
+            "diamond": 5,
+            "meteorite": 6,
+            "magic": 7,
+        }
+
+        const foodLevels = {
+            wooden: "carrot",
+            stone: "apple",
+            iron: "bread",
+            titanium: "steak",
+            diamond: "enchanted mushroom",
+            meteorite: "mystery stew",
+            magic: "shiny red berries",
+        };
+
+        const enemyLevels = (() => {
+
+            const obj = {};
+            const keys = Object.keys(enemyTypes);
+
+            for (const i in keys) {
+                obj[+i] = keys[i];
+            }
+
+            return obj;
+        })();
+
+        const {player, enemies, chests, screenFX} = (() => {
+
+            const distSquared = (x1, y1, x2, y2) => (x1 - x2)**2 + (y1 - y2)**2;
+            const dist = (x1, y1, x2, y2) => Math.sqrt(distSquared(x1, y1, x2, y2));
+
+            // gets the minimum translation vector for a circ to rect collision, if the circ and rect are colliding
+            function circToRect (circ, rect) {
+                const closestPoint = {
+                    x: constrain (circ.x, rect.x, rect.x + rect.width),
+                    y: constrain (circ.y, rect.y, rect.y + rect.height),
+                };
+
+                if (distSquared(circ.x, circ.y, closestPoint.x, closestPoint.y) >= circ.radius**2) return false;
+
+                // get the MTV
+                const pointToCirc = new Vector(circ.x - closestPoint.x, circ.y - closestPoint.y);
+
+                const mtv = pointToCirc.normalize().scale(circ.radius -  dist(circ.x, circ.y, closestPoint.x, closestPoint.y));
+                return mtv;
+            }
+
+            const attack = (() => {
+
+                function SAT (poly, circ) {
+                            
+                    let normals = [];
+                    
+                    let minD = [-1, Infinity];
+                    
+                    for (let i = 0; i < poly.length - 1; i ++) {
+                        // closest vertex to circle center
+                        const circPoly = poly[i].subtract(new Vector(circ.x, circ.y));
+                        if (circPoly.magSq() < minD[1]) {
+                            minD = [circPoly, circPoly.magSq()];
+                        }
+                        
+                        // normals of the edges of the plygon
+                        const vec = poly[i].subtract(poly[(i + 1) % (poly.length - 1)]);
+                        normals.push (new Vector(vec.y, -vec.x));
+                    }
+                    
+                    // circ to vertex axis
+                    normals.push (minD[0]);
+                    
+                    let colliding = true;
+                    let mtv = false;
+                    let minOverlap = Infinity; // axis, overlap
+                    
+                    // I wrote this a while ago but I beleive this projects the corners of the rect and center of the circle to see if the shapes are colliding
+                    for (let j = 0; j < normals.length ; j ++) {
+                        
+                        const axis = normals[j].normalize();
+                        const circProj = new Vector(circ.x, circ.y).dot(axis);
+
+                        let max = -Infinity;
+                        let min = Infinity;
+                        
+                        for (let i = 0; i < poly.length - 1; i ++) {
+                            const projection = poly[i].dot(axis);
+                            if (max < projection) max = projection;
+                            if (min > projection) min = projection;
+                        }
+                        
+                        const [circMin, circMax] = [circProj - circ.radius, circProj + circ.radius];
+                        
+                        if (!(min < circMax && max > circMin)) return false;
+                        
+                        let overlapDistance = Math.min(max, circMax) - Math.max(min, circMin);
+
+                        if (overlapDistance < minOverlap) {
+                            minOverlap = overlapDistance;
+                            mtv = axis;
+                        }
+                    }
+                    
+                    mtv = mtv.mult(minOverlap);
+                    
+                    const circCenter = createVector(circ.x, circ.y);
+                    if (poly[poly.length - 1].subtract(circCenter).dot(mtv) < 0) mtv = mtv.mult(-1);
+                    
+                    return mtv;
+                }
+
+                // the hitboxes of the weapons. Currently only one hitbox, but this would make it really easy to add a new type of weapon such as a spear
+                const attackPolys = (() => {
+
+                    // functions used to generate the polys
+                    const v = (x = 0, y = 0) => new Vector (x, y);
+                    const rot = (p, c, angle) => p.subtract(c).rotateBy(angle).add(c);
+                    const genPoly = (poly, x, y, a) => {
+                        let sum = v(0, 0);
+                                
+                        for (let i in poly) {
+                            poly[i] = rot(poly[i], v(), a);
+                            poly[i] = poly[i].add(v(x, y));
+                            sum = sum.add(poly[i]);
+                        }
+                        
+                        sum = sum.divide(poly.length);
+                        
+                        poly.push(sum);
+                        
+                        return poly;
+                    }
+
+                    return {
+                        "wooden sword": function (data) {
+                            let {width, height, angle, x, y} = data;
+                            const [w, h, a] = [width, height, angle];
+
+                            return genPoly([
+                                    v(0, -TILE_SIZE * 3.5),
+                                    v(TILE_SIZE * 2, -TILE_SIZE * 2.7),
+                                    v(TILE_SIZE * 3.5, -TILE_SIZE),
+                                    v(TILE_SIZE * 3.5, TILE_SIZE),
+                                    v(TILE_SIZE * 2, TILE_SIZE * 2.7),
+                                    v(0, TILE_SIZE * 3.5),
+                                    ], x, y, a);
+                        },
+
+
+                    }
+                })();
+
+                function handleHit (attack, target, data, user) {
+
+                    if (target.immunityTime > 0 && !(target instanceof Chest)) return;
+                    if(!SAT (attack, target)) return;
+
+                    // reset imunity time
+                    target.immunityTime = 10;
+
+                    // damage
+                    if (target instanceof Chest) {
+                        target.health --;
+                        return; // no knockback
+                    } else {
+                        target.health -= data.damage;
+                        if (easyMode && target instanceof Player) target.health += data.damage/2;
+                        if (easyMode && target instanceof Enemy) target.health -= data.damage;
+                    }
+
+                    if (target instanceof Player && player.health > 0) screenFX("damage");
+                   
+                    // knockback
+                    const dir = target.position.subtract(user.position).normalize();
+                    target.velocity = target.velocity.add(dir.mult(data.knockback * 17 + Math.random() * 2));
+                }
+
+                // function that can be called to use a weapon
+                return function (config) {
+                    let type = config.type;
+                    let user = config.user;
+
+                    let data = itemData[type];
+                    type = attackPolys[type]?type:"wooden sword";
+                    let poly = attackPolys[type](user);
+
+                    if (user instanceof Player) {
+
+                        for (const i of chests.chests) handleHit (poly, i, data, user);
+                        for (const i of enemies.enemies) handleHit (poly, i, data, user);
+                    } else {
+                        handleHit (poly, player, data, user);
+                        for (const i of chests.chests) handleHit (poly, i, data, user);
+                    }
+                }
+            })();
+
+            class Entity {
+                constructor (config) {
+                    this.position = config.position ?? new Vector(config.x ?? 0, config.y ?? 0);
+                    this.velocity = config.velocity ?? new Vector(config.vx ?? 0, config.vy ?? 0);
+                    this.angle = 0;
+
+                    this.movementPower = config.movementPower ?? 1;
+
+                    this.shape = config.shape; // either circle or rect
+
+                    this.items = [];
+
+                    if (this.shape === "rect") {
+                        this.width = config.width ?? TILE_SIZE * 1.8;
+                        this.height = config.height ?? TILE_SIZE * 1.8;
+                    } else {
+                        this.radius = config.radius ?? TILE_SIZE * 1.5;
+                        this.diameter = this.radius * 2;
+                    }
+
+                    this.health = config.health ?? 100;
+                    this.maxHealth = this.health;
+                    this.originalMaxHealth = this.maxHealth;
+                    this.dead = false;
+
+                    this._weapon = config.weapon ?? "wooden sword";
+                    this.reload = 0;
+
+                    this.immunityTime = -1;
+                }
+
+                get weapon () {
+                    return this._weapon;
+                }
+
+                set weapon (w) {
+                    this._weapon = w;
+                } 
+
+                get x () {
+                    return this.position.x;
+                }
+
+                get y () {
+                    return this.position.y;
+                }
+
+                set x (x) {
+                    return this.position.x = x;
+                }
+
+                set y (y) {
+                    return this.position.y = y;
+                }
+
+                get tileX () {
+                    return (this.x - this.x % TILE_SIZE)/TILE_SIZE;
+                }
+
+                get tileY () {
+                    return (this.y - this.y % TILE_SIZE)/TILE_SIZE;
+                }
+
+                get weaponData () {
+                    return itemData[this.weapon];
+                }
+
+                // push the entity out of another entity (entity to entity collisions)
+                colWithEntity (e) {
+                    if (distSquared(this.x, this.y, e.x, e.y) < this.diameter ** 2) {
+                        const dir = this.position.subtract(e.position).normalize();
+                        this.velocity = this.velocity.add(dir.mult(dist(this.x, this.y, e.x, e.y)/10));
+                    }
+                }
+
+                applyVelocity () {
+                    
+                    this.position = this.position.add(this.velocity);
+                    this.velocity = this.velocity.scale(0.75);
+                }
+
+                collideWithChests() {
+                    for (const i of chests.chests) {
+                        this.colWithEntity(i);
+                    }
+                }
+
+                display () {
+                    noFill ();
+                    stroke (0, 255, 0);
+                    strokeWeight (3);
+
+                    switch (this.shape) {
+                        case "rect":
+                            rect(this.x, this.y, this.width, this.height);
+                            break;
+                        case "circle":
+                            ellipse(this.x, this.y, this.diameter, this.diameter);
+                            break;
+                        default:
+                            console.log("entity shape is not valid", this);
+                    }
+                }
+
+                run () {
+                    this.update();
+                    this.display();
+                    return this.dead;
+                }
+
+                checkIfDead () {
+                    if (this.health <= 0) this.dead = true;
+                }
+
+                // will be used for subclass method overriding. I learned that this is bad practice after I had already written this and dont think that it is worth it to change it.
+                handleAttack () {}
+                handleMovement () {}
+                handleInventory () {} // this is only relevant for player and not for enemies
+
+                update () {
+
+                    this.checkIfDead();
+                    if (!player.inventoryOpen && (player.turnedOnHeadlampOnce || player.weapon === "flashlight")) this.handleMovement();
+                    this.applyVelocity();
+                    this.handleCollisions();
+                    if (!player.inventoryOpen && (player.turnedOnHeadlampOnce || player.weapon === "flashlight")) this.handleAttack();
+                    this.handleInventory();
+                    this.collideWithChests();
+                    
+                    this.reload --;
+                    this.immunityTime --;
+
+                    return this;
+                }
+
+                // collide the entity with the terrain
+                handleCollisions () {
+
+                    // loop through a 10x10 grid of blocks around the entity to collide with
+                    // only need to collide with blocks that are close to the entity.
+                    for (let i = this.tileY - 5; i < this.tileY + 5; i ++) {
+                        for (let j = this.tileX - 5; j < this.tileX + 5; j ++) {
+
+                            // only need to collide with solid blocks
+                            if (terrain.getBlock(j, i).solid) {
+                                const mtv = circToRect(this, {x: j * TILE_SIZE, y: i * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE});
+
+                                if (mtv) {
+                                    this.position = this.position.add(mtv);
+                                    this.velocity = this.velocity.mult(0.5);
+                                };
+                            }
+                        }
+                    }
+                }
+
+                // use the attack function defined earlier to use a weapon
+                attack () {
+                    if (this.reload > 0) return;
+                    if (!this.weaponData.usable) return;
+                    this.reload = this.weaponData.reload;
+                    attack({type: this.weapon, user: this});
+                }
+
+                // display the weapon that the entity is holding, animating it based on the reload time
+                displayWeapon () {
+
+                    // how many frames the weapon will swing out for. the rest of the frames in the weapons reload are reserved for the weapon traveling back to its starting position
+                    const attackFrames = 8;
+
+                    if (!images[this.weapon]) return;
+
+                    // I have implemented two different types of attack animations, but only the flashlight uses the second one (:sob:)
+                    const animType = this.weaponData.animation;
+
+                    if (this.reload > this.weaponData.reload) this.reload = this.weaponData.reload - attackFrames - 1;
+                    const framesSinceAttack = this.weaponData.reload - this.reload;
+
+                    push ();
+
+                    // lerp between values of different transformations and rotations to manuver the weapon in a way that it looks like it is being swung or thrusted
+                    if (animType === "jab") {
+
+                        translate (this.x, this.y);
+                        rotate (this.angle);
+
+                        const progress = (framesSinceAttack <= attackFrames) ? framesSinceAttack/attackFrames : 1 - (Math.min(framesSinceAttack, this.weaponData.reload) - attackFrames)/(this.weaponData.reload - attackFrames)
+                        let startX = this.radius * 0.9;
+                        let startY = this.radius * 1.1;
+                        let endX = this.radius * 2.3;
+                        let endY = this.radius * 0.5;
+
+                        translate (lerp(startX, endX, progress), lerp(startY, endY, progress));
+                        
+                        rotate (PI/4 + PI)
+
+                    } else if (animType === "swing") {
+
+                        translate (this.x, this.y);
+
+                        const progress = (framesSinceAttack <= attackFrames) ? framesSinceAttack/attackFrames : 1 - (Math.min(framesSinceAttack, this.weaponData.reload) - attackFrames)/(this.weaponData.reload - attackFrames)
+                        let startA = this.angle;
+                        let endA = this.angle - PI/1.5;
+
+                        rotate (lerp(startA, endA, progress));
+
+                        translate (this.radius * 0.9, lerp(this.radius * 1.1, 0, progress));
+
+                        startA = PI/4 + PI;
+                        endA = PI/4;
+
+                        rotate (lerp(startA, endA, progress));
+
+                    } else {
+                        translate (this.x, this.y);
+                        rotate (this.angle);
+
+                        translate (this.radius * 0.9, this.radius * 1.1);
+                        rotate (PI/4 + PI)
+                    }
+
+                    const imgS = this.radius * 1.5;
+                    image (images[this.weapon], 0, -imgS, imgS, imgS);
+
+                    pop();
+                }
+            }
+
+            class Player extends Entity {
+                constructor (config) {
+                    super(config);
+                    
+                    this.items = Array(30).fill("");
+
+                    // set the players starting inventory 
+                    this.items[0] = "pickaxe";
+                    this.items[1] = "flashlight";
+                    this.holding = 0;
+
+                    this.turnedOnHeadlampOnce = false;
+
+                    this.inventoryOpen = false;
+                    this.headlampOn = false;
+                    this.chest = false;
+
+                    this.bestSword = 0;
+                    this.bestArmor = 0;
+
+                    this.numTimesOpenedChests = 0;
+                }
+
+                get level () {
+                    return (this.bestArmor + this.bestSword)/2
+                }
+
+                get weapon () {
+                    return this.items[this.holding];
+                }
+
+                // find if there is a chest that is close enough to the player to be opened
+                get openableChest () {
+                    // find the closest chest
+                    let minChestDist = Infinity;
+                    let chest;
+                    for (const i of chests.chests) {
+                        let distance = distSquared(this.x, this.y, i.x, i.y);
+                        if (distance < minChestDist) {
+                            minChestDist = distance;
+                            chest = i;
+                        }
+                    }
+
+                    // check to see if we are close enough to open the chest
+                    if (minChestDist < (this.diameter * 1.5) ** 2) return chest;
+                    return false;
+                }
+
+                // funciton to reset the player to play again
+                reset () {
+
+                    this.position = new Vector (Math.random() * 1000 + 1000, Math.random() * 2000 + 2000);
+                    this.items = Array(30).fill("");
+
+                    // set the players starting inventory 
+                    this.items[0] = "pickaxe";
+                    this.items[1] = "flashlight";
+                    this.holding = 0;
+
+                    this.turnedOnHeadlampOnce = false;
+
+                    this.inventoryOpen = false;
+                    this.headlampOn = false;
+                    this.chest = false;
+
+                    this.bestSword = 0;
+                    this.bestArmor = 0;
+
+                    this.numTimesOpenedChests = 0;
+
+                    this.health = 100;
+                    this.maxHealth = this.health;
+                    this.originalMaxHealth = this.maxHealth;
+                    this.dead = false;
+
+                    this._weapon = "wooden sword";
+                    this.reload = 0;
+
+                    this.immunityTime = -1;
+
+                    playerPoints = 0;
+
+                    enemies.enemies = [];
+                }
+
+                handleMovement () {
+
+                    // addVelocity is the vector that will later be added to the players velocity
+                    let addVelocity = new Vector(0, 0, 0);
+
+                    if (keys.w) addVelocity.y -= 1;
+                    if (keys.s) addVelocity.y += 1;
+                    if (keys.a) addVelocity.x -= 1;
+                    if (keys.d) addVelocity.x += 1;
+
+                    // normalize the velocity so that going on diagonals does not make you faster
+                    this.velocity = this.velocity.add(addVelocity.normalize().scale(this.movementPower));
+
+                    this.angle = Math.atan2(mouseY - 300, mouseX - 300);
+
+                    // collisions with enemies
+                    for (const i of enemies.enemies) {
+                        this.colWithEntity(i);
+                    }
+                }
+
+                handleInventory () {
+
+                    // open/close the player inventory
+                    if (keys.e) {
+                        keys.e = false; // only trigger once per keypress
+                        this.inventoryOpen = !this.inventoryOpen;
+
+                        // open chests
+                        if (this.inventoryOpen) {
+                            this.chest = this.openableChest;
+                            this.numTimesOpenedChests ++;
+                        } else {
+                            this.chest = false; // close chest
+                        }
+                    }
+
+                    // turn on/off the players headlamp
+                    if (keys.f) {
+                        keys.f = false; // only trigger once per keypress
+                        this.headlampOn = !this.headlampOn;
+                        if (this.headlampOn) this.turnedOnHeadlampOnce = true;
+                    }
+
+                    if (!this.inventoryOpen) this.switchSelected();
+                }
+
+                handleAttack () {
+
+                    // handle use of item and update the players level according to level of the players items
+
+                    if (click && this.weaponData.usable) {
+
+                        this.attack();
+                        if (this.bestSword < this.weaponData.level) this.bestSword = this.weaponData.level;
+
+                    } else if (click && this.weaponData.consumable) {
+                        if (this.weaponData.consumable === "food") {
+
+                            this.health += this.weaponData.healing; // heal the player
+                            this.health = Math.min(this.health, this.maxHealth); // constrain health
+                            this.items[this.holding] = ""; // delete the food so it cannot be used twice
+
+                        } else if (this.weaponData.consumable === "armor" && this.bestArmor < this.weaponData.level) {
+
+                            this.bestArmor = this.weaponData.level; // set new best armor level
+                            this.maxHealth = this.originalMaxHealth + this.weaponData.armor; // increase player max health
+                            this.health += this.weaponData.armor; // heal the player
+                            this.health = Math.min(this.health, this.maxHealth); // constrain health
+                            this.items[this.holding] = ""; // delete armor
+
+                        }
+                    }
+                }
+
+                display () {
+                    this.displayWeapon();
+
+                    push();
+
+                    translate (this.x, this.y);
+                    rotate(this.angle - PI/2);
+
+                    image (player.headlampOn ? images.player:images.playerNoHeadlamp, -this.radius, -this.radius, this.diameter, this.diameter);
+
+                    pop();
+                }
+
+                // switch which hotbar slot the player has selected
+                switchSelected () {
+                    for (let i = 0; i < 5; i ++) {
+                        if (keys[i + 1]) {
+                            keys[i + 1] = false; // only trigger once per keypress
+                            this.holding = i;
+                        }
+                    }
+                }
+            }
+
+            class Enemy extends Entity {
+                constructor (config) {
+                    super (config);
+                    this.type = config.type;
+                }
+
+                checkIfDead () {
+                    let killed = false;
+                    if (this.health <= 0) {this.dead = true; killed = true;}
+                    if (distSquared(this.x, this.y, player.x, player.y) > 800 ** 2) this.dead = true;
+
+                    const dropType = enemyTypes[this.type].dropType;
+
+
+                    if (killed && Math.random() < 0.75) { // only drop loot 75% of the time
+
+                        let items = [];
+                        if (Math.random() < 0.4) items.push(`${dropType} sword`);
+                        if (Math.random() < 0.2 && player.bestSword > 0) items.push(`${dropType} armor`);
+                        if (Math.random() < 0.6) items.push(foodLevels[dropType]);
+
+                        chests.add({x: this.x, y: this.y, items});
+                    }
+
+                    // display feedback for the kill and reward the player with points even if the enemy does not drop any loot
+                    if (killed) {
+                        screenFX ("kill", `Killed ${this.type}: +${dropLevels[dropType]} ${dropLevels[dropType] > 1 ? "rubies":"ruby"}`);
+                        playerPoints += dropLevels[dropType];
+                    }
+                }
+
+                // move the enemy towards the player
+                handleMovement () {
+
+                    this.velocity = this.velocity.add(player.position.subtract(this.position).normalize().scale(this.movementPower));
+
+                    this.angle = Math.atan2(player.y - this.y, player.x - this.x);
+
+                    // push the enemies out of eachother so they do not overlap
+                    for (const i of enemies.enemies) {
+                        if (i === this) continue;
+                        this.colWithEntity (i);
+                    }
+
+                    this.colWithEntity (player);
+                }
+
+                // attack when close to the player
+                handleAttack () {
+                    if (distSquared(this.x, this.y, player.x, player.y) < (TILE_SIZE * 3.8) ** 2 || Math.random() < 1/60/10) this.attack();
+                }
+
+                display () {
+                    if (!images[this.type]) return;
+
+                    this.displayWeapon();
+                    push();
+
+                    translate (this.x, this.y);
+                    rotate(this.angle - PI/2);
+
+                    image (images[this.type], -this.radius, -this.radius, this.diameter, this.diameter);
+
+                    pop();
+                }
+            }
+
+            class Chest extends Entity {
+                constructor (config) {
+                    super (config);
+
+                    this.shape = "circle";
+                    this.health = 1;
+                    this.items = copyObj(config.items);
+                }
+
+                display () {
+                    image (images.chest, this.x - TILE_SIZE * 1.5, this.y - TILE_SIZE * 1.5, TILE_SIZE * 3, TILE_SIZE * 3);
+                }
+
+                run () {
+                    this.display();
+                    return this.items.length < 1 || this.health <= 0 || (() => {
+                        let dead = true;
+                        for (const i of this.items) if (i) dead = false;
+                        if (player.chest) dead = false;
+                        return dead;
+                    })();
+                }
+            }
+
+            const enemies = {
+                enemies: [],
+
+                run () {
+                    for (var i = this.enemies.length - 1; i >= 0; i--) {
+                        if (this.enemies[i].run()) this.enemies.splice(i, 1);
+                    }
+                },
+
+                add (config) {
+                    this.enemies.push (new Enemy(config));
+                },
+            }
+
+            const chests = {
+                chests: [],
+
+                run () {
+                    for (var i = this.chests.length - 1; i >= 0; i--) {
+                        if (this.chests[i].run()) this.chests.splice (i, 1);
+                    }
+                },
+
+                add (config) {
+                    this.chests.push(new Chest(config));
+                }
+            };
+
+            const player = new Player({x: 0, y: 0, shape: "circle"})
+
+            // effects such as red tint on damage and text messages for kills
+            const screenFX = (() => {
+                let damageOpacity = 0;
+                let killOpacity = 0;
+                let displayText = ""
+
+                return function (type, data) {
+                    if (type === "damage") {
+                        damageOpacity = 100;
+                    } else if (type === "kill") {
+                        killOpacity = 255;
+                        displayText = data;
+                    }
+
+                    if (damageOpacity > 0) {
+                        noStroke();
+                        fill(200, 20, 20, damageOpacity);
+                        rect(0, 0, width, height);
+
+                        damageOpacity -= 20;
+                    }
+                    
+                    if (killOpacity > 0) {
+                        fill(245, killOpacity);
+                        noStroke();
+                        textSize(40);
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER);
+                        text(displayText, 300, 40);
+
+                        killOpacity --;
+                    } else if (!player.headlampOn && player.items[player.holding] !== "flashlight"){
+                        // message to turn on headlamp
+                        fill(245);
+                        noStroke();
+                        textSize(40);
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER); 
+                        if (!player.inventoryOpen) text("Press [F] to turn on your headlamp", 300, 40);
+                    }
+                }
+            })();
+
+            return {player, enemies, chests, screenFX};
+        })();
+
+        const scenes = (() => {
+
+            const startScene = "home";
+
+            // returns an object with a function for each scene and a function that runs the current scene. This function will also transition to a new scene at the end of the frame if necesary.
+            // the reason that the scene functions are the way they are (an iife returning a function) is so that each scene can have a local scope to store data that is only relevant to the scene.
+
+            return {
+                current: "loading",
+
+                run () {
+                    this[this.current](); // run the current scene
+
+                    click = false;
+
+                    if (scenes.nextTransition) { // transition
+                        scenes.nextTransition[1] = scenes.nextTransition[1](); // get the image of the canvas at the time of the start of the transition
+                        scenes.transition(...scenes.nextTransition)
+                    };
+                },
+
+                nextTransition: false,
+                transitionTo: false, // so buttons can display during the transition
+            
+                transition: (() => {
+            
+                    let fromImg;
+                    let to = "";
+                    let amt = 0;
+                    let speed = 1;
+                    let data = false;
+                    let sentData = false;
+                    let transitionType = "slide";
+            
+                    return function (_to, img, _speed, _transitionType = "slide", _data) {
+            
+                        amt += (delataTime)/1000/speed;
+                        
+                        if (_to) {
+
+                            // so we dont try to transition twice
+                            scenes.nextTransition = false;
+                            
+                            // reset data for the transition
+                            to = _to;
+                            scenes.transitionTo = to;
+                            transitionType = _transitionType;
+                            fromImg = img;
+                            scenes.current = "transition";
+                            amt = 0;
+                            data = _data || false;
+                            sentData = false;
+
+                            if (_speed && _speed > 0) speed = _speed;
+                        }
+            
+                        if (amt < 0.5) {
+                            // display image from last scene
+                            image(fromImg, 0, 0, 600, 600);
+                        } else if (amt < 1){
+                            // run the next scene
+                            if (sentData) {
+                                scenes[to]();
+                            } else {
+                                scenes[to](data);
+                                sentData = true;
+                            }
+                            
+                        } else {
+                            // switch to the next scene
+                            scenes.current = to;
+                            scenes.transitionTo = false;
+                        }
+                
+                        if (transitionType === "shrink") {
+                            if (amt < 0.5) amt = 0.5; // only second half of transition
+                            const a = (amt - 0.5) * 2;
+
+                            noStroke();
+                            fill(240);
+                            rect (a * 27, a * 267, lerp(606, 306, a), lerp(606, 306, a));
+                            image(fromImg, a * 30, a * 270, lerp(600, 300, a), lerp(600, 300, a))
+                        } else {
+                            // the gray square that sweeps over the screen
+                            fill(20);
+                            noStroke();
+                            rect(-600 + 1200 * anim1(amt), 0, 600, 600);
+                        }
+                        
+                    }
+                })(),
+            
+                loading: (() => {
+            
+                    let curInd = 0;
+                    let keys = Object.keys(images);
+            
+                    return function () {
+
+                        background (50);
+            
+                        // replace the functions in the image objects with what they return;
+                        if (images[keys[curInd]]) images[keys[curInd]] = images[keys[curInd]]();
+                        
+                        // generate text with . for progress
+                        let txt = (() => {
+            
+                            if (curInd >= keys.length - 1) return "LOADED!";
+            
+                            let res = ["LOADING"];
+                            for (let j = 0; j <= curInd / 2; j ++) {
+                                res[res.length - 1] += "."
+                                if (textWidth(res[res.length - 1]) > 550) {
+                                    res[res.length - 1] += "\n";
+                                    res.push("");
+                                }
+                            }
+
+                            const innitial = "";
+                            const fullRes = res.reduce(
+                                (accumulator, currentValue) => accumulator + currentValue,
+                                innitial,
+                            );
+
+                            return fullRes;
+                        })();
+                        
+                        // Display the loading progress
+                        textSize(100);
+                        textFont('Anton');
+                        fill(220);
+                        textAlign(CENTER, BASELINE);
+            
+                        text (txt, 300, 270);
+            
+                        curInd ++;
+
+                        if (curInd >= keys.length) {
+                            scenes.nextTransition = [startScene, get, 0.3];
+                        }
+                    }
+                })(),
+
+                play: (() => {
+
+                    function displayTerrain () {                        
+                        noStroke();
+
+                        for (let i = player.tileY - TILES_IN_SCREEN; i < player.tileY + TILES_IN_SCREEN; i ++) {
+                            for (let j = player.tileX - TILES_IN_SCREEN; j < player.tileX + TILES_IN_SCREEN; j ++) {
+
+                                // this determines which tile of the pixel art will be displayed
+                                // the tileating pixel art tiles are bigger than the tiles themselves, so the pixel art has to be broken up
+                                let x = j < 0 ? (3 - (-j % 4)) : j % 4;
+                                let y = i < 0 ? (3 - (-i % 4)) : i % 4;
+
+                                const blockType = terrain.getBlock(j, i).type;
+
+                                if (blockType === "wall") {
+                                    image(images.wall[x + y * 4], j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                                } else if (blockType === "stone") {
+                                    image(images.stone[x + y * 4], j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                                } else if (blockType === "smoothStone") {
+                                    image(images.smoothStone[x + y * 4], j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                                } else {
+                                    image(images.path[x + y * 4], j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                                }                          
+                            }
+                        }
+                    }
+
+                    function spawnEnemies () {
+
+                        // max enemies is determined by the players level
+                        if (enemies.enemies.length >= Math.max(1, player.level * 0.75)) return;
+
+                        // aim to spawn an enemy every 3 second
+                        if (Math.random() > 1/(60 * 3)) return;
+
+                        // calculate the level of the enemy to spawn
+                        let enemyLevel = Math.min(Math.round(random(player.level - 0.5, player.level + 0.5)), 6);
+
+                        // the angle from the player to spawn the enemy at. the enemies spawn in a ring around the player so the player does not see them spawning
+                        const angle = Math.random() * Math.PI * 67;
+
+                        let data = copyObj(enemyTypes[enemyLevels[enemyLevel]]);
+
+                        // calculate x and y coords of the enemy's spawn point
+                        data.x = player.x + cos(angle) * TILES_IN_SCREEN * TILE_SIZE * 0.7;
+                        data.y = player.y + sin(angle) * TILES_IN_SCREEN * TILE_SIZE * 0.7;
+                        data.shape = "circle";
+
+                        enemies.add(data);
+
+                        // dont spawn enemies inside of a wall 
+                        const enemy = enemies.enemies[enemies.enemies.length - 1];
+                        if (terrain.getBlock(enemy.tileX, enemy.tileY).solid) enemy.dead = true;
+                    }
+
+                    function displayLight () {
+
+                        // determine which light mask should be overlaid
+                        if (player.items[player.holding] === "flashlight") {
+                            image(images.brightightMask, 0, 0, width, height);
+                        } else if (player.headlampOn) {
+                            image(images.dimLightMask, 0, 0, width, height);
+                        } else {
+                            image(images.noLightMask, 0, 0, width, height);
+                        }
+                    }
+
+                    function rearangeInventories (mx, my, invX, invY, chest) {
+                        // find which box the player is hovering over
+                        let x = Math.floor((mx - (mx % 51.2))/51.2);
+                        let y = Math.floor((my - (my % 51.2))/51.2);
+
+                        // highlight the selected square
+                        noFill();
+                        stroke(230);
+                        strokeWeight(6);
+                        rect(invX + 3 + 50 * x, invY + 3 + 50 * y, 50, 50);
+
+                        // swap the items to the hotbar
+                        for (let i = 0; i < 5; i ++) {
+                            if (keys[i + 1]) {
+                                keys[i + 1] = false; // only trigger once per keypress
+                                let originalHotbar = player.items[i];
+
+                                if (!chest) {
+                                    player.items[i] = player.items[y * 5 + x + 5];
+                                    player.items[y * 5 + x + 5] = originalHotbar;
+                                } else {
+                                    player.items[i] = chest.items[y * 5 + x];
+                                    chest.items[y * 5 + x] = originalHotbar;
+                                }
+                                
+                            }
+                        }
+                    }
+
+                    function displayPlayerInventory () {
+
+                        // start by displaying the hotbar
+                        image (images.hotbar, 175 - 3, 522, 256, 56);
+
+                        noStroke();
+                        fill (255, 200);
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER);
+
+                        textSize(15);
+
+                        // display the items in the player's hotbar
+                        for (let i = 0; i < 5; i ++) {
+
+                            text (i + 1, i * 50 + 200, 587);
+
+                            const item = player.items[i];
+                            if (item) image(images[item], 184 + i * 50, 534, 35, 35);
+                        }
+
+                        noFill();
+                        stroke(230);
+                        strokeWeight(4);
+                        rect(175 + 50 * player.holding, 525, 50, 50);
+
+                        // now, if the inventory is open, display the inventory
+                        if (!player.inventoryOpen) return;
+
+                        // tell the player how to use the inventory
+                        textSize(40);
+                        noStroke();
+                        fill(255, 200);
+                        text("Press numbers 1-5 to swap items\nin your inventory", 300, 60);
+
+                        let chest = player.chest;
+                        let [invX, invY] = [172, 172];
+                        let [chestX, chestY] = [311, 172];
+
+                        if (chest) invX = 33;
+
+                        image(images.inventory, invX, invY, 256, 256);
+                        if (chest) image(images.inventory, chestX, chestY, 256, 256); // display chest
+
+                        // display the items in the player's inventory and chest
+                        for (let i = 0; i < 5; i ++) {
+                            for (let j = 0; j < 5; j ++) {
+                                let item = player.items[i * 5 + j + 5];
+                                if (item) image(images[item], invX + 12 + j * 50, invY + 12 + i * 50, 35, 35);
+
+                                if (chest) {
+                                    item = chest.items[i * 5 + j];
+                                    if (item && images[item]) image(images[item], chestX + 12 + j * 50, chestY + 12 + i * 50, 35, 35);
+                                }
+                            }
+                        }
+
+                        // allow the user to arrange their inventory
+
+                        // make sure the mouse is actually over the inventory
+                        let [mx, my] = [mouseX - invX, mouseY - invY]; // relative mouse coords
+                        if (mx > 0 && my > 0 && mx < 256 && my < 256) {
+                            rearangeInventories(mx, my, invX, invY, false);
+                        }
+
+                        if (!chest) return; // dont need to swap items in a chest if a chest is not open
+                        [mx, my] = [mouseX - chestX, mouseY - chestY];
+                        if (mx > 0 && my > 0 && mx < 256 && my < 256) {
+                            rearangeInventories(mx, my, chestX, chestY, chest);
+                        }
+                    }
+
+                    function displayPlayerHearts () {
+
+                        function displayHeart (img, i) {
+                            image(img, i * 2.3 + 165, 490, 20, 20);
+                        }
+
+                        function displayArmor (img, i) {
+                            image(img, ((i - 10) % 100 + 10) * 2.3 + 165, 467 - 23 * Math.floor((i - 10)/100), 20, 20);
+                        }
+
+                        // display the hearts
+                        for (var i = 10; i <= player.originalMaxHealth; i += 10) {
+
+                            if (i > player.health && i - 10 < player.health) {
+                                displayHeart(images.halfHeart, i)
+                            } else if (i <= player.health) {
+                                displayHeart(images.heart, i)
+                            }else {
+                                displayHeart(images.emptyHeart, i)
+                            }
+                        }
+
+                        // display the armor
+                        const amountArmor = player.maxHealth - player.originalMaxHealth;
+                        const armorHealth = player.health - 100;
+
+                        for (var i = 10; i <= amountArmor; i += 10) {
+                            if (i > armorHealth && i - 10 < armorHealth) {
+                                displayArmor(images.halfArmor, i)
+                            } else if (i <= armorHealth) {
+                                displayArmor(images.armor, i)
+                            }else {
+                                displayArmor(images.emptyArmor, i)
+                            }
+                        }
+                    }
+
+                    // make sure that different screen effects dont interfere
+                    function handleScreenFX () {
+                        if (!player.inventoryOpen && (!player.openableChest || player.numTimesOpenedChests >= 2)) {
+                            screenFX();
+                        }
+
+                        if (!player.inventoryOpen && player.openableChest && player.numTimesOpenedChests < 2) {
+                            fill(245);
+                            noStroke();
+                            textSize(40);
+                            textFont('VT323');
+                            textAlign(CENTER, CENTER);
+                            text("[E] to open chest", 300, 40);
+                        }
+                    }
+
+                    return function () {
+
+                        let playerDead = false;
+
+                        push();
+                        // put the player in the center of the screen
+                        translate (Math.round(300 - player.x), Math.round(300 - player.y));
+
+                        background (230);
+                        displayTerrain ();
+                        spawnEnemies();
+
+                        chests.run();
+                        if (player.run()) playerDead = true;
+                        enemies.run();
+
+                        pop();
+
+                        displayLight();
+                        displayPlayerInventory();
+                        displayPlayerHearts();
+                        handleScreenFX();
+
+                        if (playerDead) scenes.nextTransition = ["gameOver", get, 1, "shrink", {img: get()}];
+                    }
+                })(),
+
+                gameOver: (() => {
+
+                    let img;
+
+                    return function (_data) {
+                        if (_data) img = _data.img;
+
+                        background(20);
+
+                        // outline for the image
+                        noStroke();
+                        fill(240);
+                        rect(27, 267, 306, 306);
+
+                        // display the image
+                        if (img) image(img, 30, 270, 300, 300);
+
+                        // messages
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER);
+
+                        fill (220, 20, 20);
+                        textSize(120);
+                        text("You Died", 300 + Math.random() * 4 - 2, 60 + Math.random() * 4 - 2);
+
+                        fill (240);
+                        textSize(40);
+
+                        if (playerPoints > 0) {
+                            text(`at least you survived long\nenough to find ${playerPoints > 1 ? playerPoints:"a"} ${playerPoints === 1 ? "ruby":"rubies"}`, 300, 180);
+                        } else {
+                            text(`and you didnt even find a\nsingle ruby`, 300, 180);
+                        }
+                        
+                        buttons.run();
+                    }
+                })(),
+
+                selectMode: (() => {
+                    return function () {
+                        image(images.menuImg, 0, 0);
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER);
+
+                        fill (220);
+                        textSize(120);
+                        text("Select Mode:", 300, 80);
+
+                        buttons.run();
+                    }
+                })(),
+
+                home: (() => {
+
+                    return function () {
+                        image(images.menuImg, 0, 0, width, height);
+
+                        // title
+                        textFont('VT323');
+                        textAlign(CENTER, CENTER);
+
+                        fill (20);
+                        stroke (240);
+                        strokeWeight (4);
+                        textSize(120);
+                        text("Subterranean", 300, 50);
+                        text("Survival", 300, 140);
+
+                        noStroke ();
+                        fill(86, 56, 10);
+                        rect(50, 490, 500, 80);
+
+                        stroke(240)
+                        fill(20);
+
+                        textSize (90);
+                        text("CLICK TO PLAY", 300, 530);
+
+                        image(images.menuMiner, 140, 256, 200, 200);
+
+                        if (click) {
+                            player.reset();
+                            scenes.nextTransition = ["selectMode", get, 0.8];
+                        }
+                    }
+                })(),
+            };
+        })();
+
+        const drawFunction = (() => {
+
+            // for delta time calculations
+            let then = performance.now();
+
+            // not using function x () {} notation because iife. iife is simply for organization here
+            setup = function () {
+            
+                // this clears all animation frames preventing them from stacking up if the webpage is reloaded
+                // sourced from stack overflow somewhere
+                let id = window.requestAnimationFrame(function(){});
+                while (id--){
+                    window.cancelAnimationFrame(id);
+                }
+                
+                createCanvas (600, 600);
+                frameRate(60); // max framerate yay
+            };
+            
+            draw = function () {
+
+                let now = performance.now();
+                delataTime = now - then;
+                then = now;
+
+                scenes.run();
+
+                if (easyMode) {
+                    fill(245);
+                    noStroke();
+                    textSize(40);
+                    textFont('VT323');
+                    textAlign(LEFT, TOP);
+                    text("Easy Mode", 0, 560);
+                }
+            };
+        })()    
+        
+        const userInput = (() => {
+            // not using function x () {} notation because iife. iife is simply for organization here
+
+            mousePressed = function() {
+                click = true;
+            }
+
+            keyPressed = function () {
+                keys[key] = keys[key.toString()] = true;
+            }
+            
+            keyReleased = function () {
+                keys[key] = keys[key.toString()] = false;
+            }
+        })();
+        
+        })();
+    </script>
+</html>
